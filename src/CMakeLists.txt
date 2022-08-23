@@ -12,22 +12,23 @@ endif()
 # When adding new institutes to the source tree, please add them here as well.
 # You can exclude institute directories from compilation by commenting them out.
 set(DEFAULT_INSTITUTES
-    akvaplan     # Akvaplan-niva, Norway
-    au           # University of Aarhus, Denmark
-    bb           # Bolding & Bruggeman - formerly Bolding & Burchard
-    csiro        # Commonwealth Scientific and Industrial Research Organisation, Australia
-    ersem        # European Regional Seas Ecosystem Model
-    examples     # Examples supplied with FABM itself
-    gotm         # Models ported from original GOTM/BIO library
-    iow          # Leibniz Institute for Baltic Sea Research, Germany
-    jrc          # EC - Joint Research Centre, Ispra, Italy
-    msi          # Marine Systems Institute, Tallinn University of Technology, Estonia
-    niva         # Norwegian Institute for Water Research, Norway
-    pclake       # The PCLake model - reference implementation
-    pml          # Plymouth Marine Laboratory, United Kingdom
-    selma        # Simple EcoLogical Model for the Aquatic - PROGNOS
-    su           # Swansea University, United Kingdom
-    uhh          # University of Hamburg, Germany
+    #akvaplan     # Akvaplan-niva, Norway
+    #au           # University of Aarhus, Denmark
+    #bb           # Bolding & Bruggeman - formerly Bolding & Burchard
+    #csiro        # Commonwealth Scientific and Industrial Research Organisation, Australia
+    #ersem        # European Regional Seas Ecosystem Model
+    #examples     # Examples supplied with FABM itself
+    #gotm         # Models ported from original GOTM/BIO library
+    imr          # Institute of Marine Research, Norway
+    #iow          # Leibniz Institute for Baltic Sea Research, Germany
+    #jrc          # EC - Joint Research Centre, Ispra, Italy
+    #msi          # Marine Systems Institute, Tallinn University of Technology, Estonia
+    #niva         # Norwegian Institute for Water Research, Norway
+    #pclake       # The PCLake model - reference implementation
+    #pml          # Plymouth Marine Laboratory, United Kingdom
+    #selma        # Simple EcoLogical Model for the Aquatic - PROGNOS
+    #su           # Swansea University, United Kingdom
+    #uhh          # University of Hamburg, Germany
 )
 
 # Ensure FABM_INSTITUTES tracks the up-to-date DEFAULT_INSTITUTES list unless the user manually customized FABM_INSTITUTES.
