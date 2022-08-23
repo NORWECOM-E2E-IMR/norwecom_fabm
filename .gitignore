@@ -8,6 +8,7 @@
 lib/
 modules/
 build/
+debug/
 timestamp
 VERSION
 include/version.h
