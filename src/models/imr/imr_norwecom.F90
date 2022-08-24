@@ -79,15 +79,24 @@ contains
         integer, intent(in) :: configunit
 
         ! Initialize state variables
-        call self%register_state_variable(self%id_nit, "nit", "mgN m-3", "Nitrate concentration", minimum = 0.0_rk, initial_value = 10.0_rk)
-        call self%register_state_variable(self%id_pho, "pho", "mgP m-3", "Phosphate concentration", minimum = 0.0_rk, initial_value = 2.0_rk)
-        call self%register_state_variable(self%id_sil, "sil", "mgSi m-3", "Silicate concentraton", minimum = 0.0_rk, initial_value = 10.0_rk)
-        call self%register_state_variable(self%id_sis, "sis", "mgSi m-3", "Biogenic silica concentration", minimum = 0.0_rk, initial_value = 0.1_rk)
-        call self%register_state_variable(self%id_det, "det", "mgN m-3", "Nitrogen detritus concentration", minimum = 0.0_rk, initial_value = 0.1_rk)
-        call self%register_state_variable(self%id_detp, "detp", "mgP m-3", "Phosphorus detritus concentration", minimum = 0.0_rk, initial_value = 0.1_rk)
-        call self%register_state_variable(self%id_oxy, "oxy", "mg l-1", "Dissolved oxygen concentration", minimum = 0.0_rk, initial_value = 10.0_rk)
-        call self%register_state_variable(self%id_dia, "dia", "mgN m-3", "Diatoms concentration", minimum = 0.0001_rk, initial_value = 0.1_rk)
-        call self%register_state_variable(self%id_fla, "fla", "mgN m-3", "Flagellates concentration", minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_state_variable(self%id_nit, "nit", "mgN m-3", "Nitrate concentration", &
+            minimum = 0.0_rk, initial_value = 10.0_rk)
+        call self%register_state_variable(self%id_pho, "pho", "mgP m-3", "Phosphate concentration", &
+            minimum = 0.0_rk, initial_value = 2.0_rk)
+        call self%register_state_variable(self%id_sil, "sil", "mgSi m-3", "Silicate concentraton", &
+            minimum = 0.0_rk, initial_value = 10.0_rk)
+        call self%register_state_variable(self%id_sis, "sis", "mgSi m-3", "Biogenic silica concentration", &
+            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = 3.47e-5_rk)
+        call self%register_state_variable(self%id_det, "det", "mgN m-3", "Nitrogen detritus concentration", &
+            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.47e-5_rk)
+        call self%register_state_variable(self%id_detp, "detp", "mgP m-3", "Phosphorus detritus concentration", &
+            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.45e-5_rk)
+        call self%register_state_variable(self%id_oxy, "oxy", "mg l-1", "Dissolved oxygen concentration", &
+            minimum = 0.0_rk, initial_value = 10.0_rk)
+        call self%register_state_variable(self%id_dia, "dia", "mgN m-3", "Diatoms concentration", &
+            minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_state_variable(self%id_fla, "fla", "mgN m-3", "Flagellates concentration", &
+            minimum = 0.0001_rk, initial_value = 0.1_rk, vertical_movement = -2.89e-6_rk)
 
         ! Initialize diagnostic variables
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
