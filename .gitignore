@@ -9,6 +9,7 @@ lib/
 modules/
 build/
 debug/
+release/
 timestamp
 VERSION
 include/version.h
