@@ -27,6 +27,7 @@ module imr_norwecom
         type(type_diagnostic_variable_id) :: id_chla !! Chlorophyll a
         type(type_diagnostic_variable_id) :: id_gpp !! Gross primary production
         type(type_diagnostic_variable_id) :: id_npp !! Net primary production
+        type(type_diagnostic_variable_id) :: id_totsil !! Total silicate concentration
 
         ! Define dependencies
         type(type_dependency_id) :: id_temp !! Temperature
@@ -54,10 +55,12 @@ module imr_norwecom
         real(rk) :: cc4 !! Detritus decomposition rate
         real(rk) :: diamin !! Mimimum diatoms concentration
         real(rk) :: flamin !! Mimimum flagellates concentration
+        real(rk) :: n2chla !! Cellular fraction of nitrate and chlorophyll a
         real(rk) :: srdia_min !! Minimum diatoms sinking rate
         real(rk) :: srdia_max !! Maximum diatoms sinking rate
         real(rk) :: sib !! Si concentration with diatom max sinking rate
         real(rk) :: scc1 !! O/N consumption rate
+        real(rk) :: scc2 !! Intercellular C/N ratio
         real(rk) :: scc4 !! Bioenegic silica decomposition rate
 
     contains
@@ -102,6 +105,7 @@ contains
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
         call self%register_diagnostic_variable(self%id_gpp, "gpp", "mgC m-3", "Gross primary production")
         call self%register_diagnostic_variable(self%id_npp, "npp", "mgC m-3", "Net primary production")
+        call self%register_diagnostic_variable(self%id_totsil, "totsis", "mgSi m-3", "Total silicate concentration")
 
         ! Initialize dependencies
         call self%register_dependency(self%id_temp, standard_variables%temperature)
@@ -131,10 +135,12 @@ contains
         call self%get_parameter(self%cc4, "cc4", "s-1", "Detritus decomposition rate", default = 1.52e-7_rk)
         call self%get_parameter(self%diamin, "diamin", "mgN m-3", "Minimum diatoms concentration", default = 0.1_rk)
         call self%get_parameter(self%flamin, "flamin", "mgN m-3", "Minimum flagellates concentration", default = 0.1_rk)
+        call self%get_parameter(self%n2chla, "n2chla", "mgN mgChla-1", "Cellular fraction of nitrate and chlorophyll a", default = 11.0_rk)
         call self%get_parameter(self%srdia_min, "srdia_min", "mgN m-3", "Minimum diatoms sinking rate", default = 3.47e-6_rk)
         call self%get_parameter(self%srdia_max, "srdia_max", "mgN m-3", "Maximum diatoms sinking rate", default = 3.47e-5_rk)
         call self%get_parameter(self%sib, "sib", "uM", "Si concentration with diatom max sinking rate", default = 1.0_rk)
         call self%get_parameter(self%scc1, "scc1", "mgO mgN-1", "O/N consumption rate", default = 19.71_rk)
+        call self%get_parameter(self%scc2, "scc2", "mgC mgN-1", "Intercellular C/N ratio", default = 5.68_rk)
         call self%get_parameter(self%scc4, "scc4", "s-1", "Biogenic silica decomposition rate", default = 1.45e-8_rk)
 
         ! Initiate aggregate variables
@@ -148,12 +154,12 @@ contains
     !!
     !! Currently only the oxygen air-sea flux
     subroutine do_surface(self, _ARGUMENTS_DO_SURFACE_)
-        class(type_imr_norwecom), intent(in) :: self
+        class(type_imr_norwecom), intent(in) :: self !! NORWECOM FABM model class
         _DECLARE_ARGUMENTS_DO_SURFACE_
 
+        ! Temporary variables
         real(rk) :: temp, salt, dens, oxy
         real(rk) :: tempk, pvel, osat, doxy
-
         pvel = 5.0_rk
 
         _SURFACE_LOOP_BEGIN_
@@ -178,7 +184,7 @@ contains
 
     !> Runs pelagic processes of the biogeochemical model
     subroutine do(self, _ARGUMENTS_DO_)
-        class(type_imr_norwecom), intent(in) :: self
+        class(type_imr_norwecom), intent(in) :: self !! NORWECOM FABM model class
         _DECLARE_ARGUMENTS_DO_
 
         ! Temporary variables
@@ -186,6 +192,7 @@ contains
         real(rk) :: umax, rad_lim, nit_lim, pho_lim, sil_lim
         real(rk) :: prod_dia, resp_dia, mort_dia, prod_fla, resp_fla, mort_fla
         real(rk) :: dnit, dpho, dsil, dsis, ddet, doxy, ddia, dfla
+        real(rk) :: gpp, npp, chla
 
         _LOOP_BEGIN_
 
@@ -213,10 +220,12 @@ contains
         nit_lim = slim(self%dia_kn, umax, nit)
         pho_lim = slim(self%dia_kp, umax, pho)
         sil_lim = slim(self%dia_ks, umax, sil)
+
+        ! print *, temp, par, rad !, rad_lim, nit_lim, pho_lim, sil_lim
         prod_dia = umax * min(rad_lim, nit_lim, pho_lim, sil_lim) * dia
         resp_dia = self%a5 * dia * exp(self%a6 * temp)
         mort_dia = self%cc3 * dia
-
+        
         ! Constrain diatom losses
         if (dia < self%diamin) then
             resp_dia = 0.0_rk
@@ -238,12 +247,17 @@ contains
             mort_fla = 0.0_rk
         end if
 
+        ! Primary production
+        gpp = self%scc2 * (prod_dia + prod_fla)
+        npp = self%scc2 * (prod_dia + prod_fla - (resp_dia + resp_fla))
+        chla = (dia + fla) / self%n2chla
+
         !----- Fluxes -----!
 
         dnit = resp_dia + resp_fla + self%cc4 * det - (prod_dia + prod_fla)
         dpho = self%cc1 * dnit
         dsil = self%scc4 * sis - self%cc2 * prod_dia
-        dsis = self%cc2 * (resp_dia + mort_dia) - self%cc4 * sis
+        dsis = self%cc2 * (resp_dia + mort_dia) - self%scc4 * sis
         ddet = mort_dia + mort_fla - self%cc4 * det
         doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det))) * 1e-3 ! mg m-3 -> mg l
         ddia = prod_dia - (resp_dia + mort_dia)
@@ -259,6 +273,11 @@ contains
         _ADD_SOURCE_(self%id_oxy, doxy)
         _ADD_SOURCE_(self%id_dia, ddia)
         _ADD_SOURCE_(self%id_fla, dfla)
+
+        _SET_DIAGNOSTIC_(self%id_totsil, sil+sis)
+        _SET_DIAGNOSTIC_(self%id_gpp, gpp)
+        _SET_DIAGNOSTIC_(self%id_npp, npp)
+        _SET_DIAGNOSTIC_(self%id_chla, chla)
 
         _LOOP_END_
 
