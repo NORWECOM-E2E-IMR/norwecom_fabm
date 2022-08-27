@@ -8,7 +8,9 @@ module imr_norwecom
 
     private
 
-    logical, parameter :: zooplankton = .false. !! Include or exclude zooplankton
+    logical, parameter :: zooplankton = .true. !! Include or exclude zooplankton
+    real(rk), parameter :: eps = 1.0e-6_rk
+    real(rk), parameter :: day_sec = 86400.0_rk
 
     !> NORWECOM FABM model type definition
     type, extends(type_base_model), public :: type_imr_norwecom
@@ -22,6 +24,8 @@ module imr_norwecom
         type(type_state_variable_id) :: id_oxy !! Dissolved oxygen
         type(type_state_variable_id) :: id_dia !! Diatoms
         type(type_state_variable_id) :: id_fla !! Flagellates
+        type(type_state_variable_id) :: id_mic !! Microzooplankton
+        type(type_state_variable_id) :: id_mes !! Mesozooplankton
 
         ! Define diagnostic variables
         type(type_diagnostic_variable_id) :: id_chla !! Chlorophyll a
@@ -73,6 +77,20 @@ module imr_norwecom
         real(rk) :: scc1 !! O/N consumption rate
         real(rk) :: scc2 !! Intercellular C/N ratio
         real(rk) :: scc4 !! Bioenegic silica decomposition rate
+        real(rk) :: pi11 !! Mesozooplankton prey preference for diatoms
+        real(rk) :: pi12 !! Mesozooplankton prey preference for microzooplankton
+        real(rk) :: pi13 !! Mesozooplankton prey preference for detritus
+        real(rk) :: pi21 !! Microzooplankton prey preference for flagellates
+        real(rk) :: pi22 !! Microzooplankton prey preference for detritus
+        real(rk) :: k3 !! Half-saturation constant for zooplankton ingestion
+        real(rk) :: k6 !! Half-saturation constant for zooplankton loss
+        real(rk) :: q10 !! Temperature dependence on zooplankton growth
+        real(rk) :: mju2 !! Maximum loss rate of zooplankton
+        real(rk) :: beta !! Assimilation efficiency for zooplankton
+        real(rk) :: delta !! Fraction of zooplankton losses to detritus
+        real(rk) :: eps !! Fraction of zooplankton losses to nitrate
+        real(rk) :: mes_g !! Mesozooplankton maximum growth rate
+        real(rk) :: mic_g !! Microzooplankton maximum growth rate
 
     contains
         procedure :: initialize
@@ -94,7 +112,7 @@ contains
 
         real(rk) :: pmax, dia_ar, dia_an, dia_ap, dia_as, fla_ar, fla_an, fla_ap
 
-        ! Initialize state variables
+        !----- Initialize state variables -----!
         call self%register_state_variable(self%id_nit, "nit", "mgN m-3", "Nitrate concentration", &
             minimum = 0.0_rk, initial_value = 168.0_rk)
         call self%register_state_variable(self%id_pho, "pho", "mgP m-3", "Phosphate concentration", &
@@ -113,6 +131,10 @@ contains
             minimum = 0.0001_rk, initial_value = 0.1_rk)
         call self%register_state_variable(self%id_fla, "fla", "mgN m-3", "Flagellates concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk, vertical_movement = -2.89e-6_rk)
+            call self%register_state_variable(self%id_mic, "mic", "mgN m-3", "Microzooplankton concentraton", &
+            minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_state_variable(self%id_mes, "mes", "mgN m-3", "Mesozooplankton concentration", &
+            minimum = 0.0001_rk, initial_value = 0.1_rk)
 
         !----- Initialize diagnostic variables -----!
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
@@ -159,7 +181,9 @@ contains
         print *, self%dia_ar, self%dia_an, self%dia_ap, self%dia_as, self%fla_ar, self%fla_an, self%fla_ap
         call self%get_parameter(self%cc1, "cc1", "mgP mgN-1", "Intercellular P/N ratio", default = 0.138_rk)
         call self%get_parameter(self%cc2, "cc2", "mgSi mgN-1", "Intercellular Si/N ratio", default = 1.75_rk)
-        if (.not. zooplankton) then
+        if (zooplankton) then
+            call self%get_parameter(self%cc3, "cc3", "s-1", "Phytoplankton mortality rate", default = 1.6e-7_rk)
+        else
             call self%get_parameter(self%cc3, "cc3", "s-1", "Phytoplankton mortality rate", default = 1.6e-6_rk)
         end if
         call self%get_parameter(self%cc4, "cc4", "s-1", "Detritus decomposition rate", default = 1.52e-7_rk)
@@ -173,7 +197,23 @@ contains
         call self%get_parameter(self%scc2, "scc2", "mgC mgN-1", "Intercellular C/N ratio", default = 5.68_rk)
         call self%get_parameter(self%scc4, "scc4", "s-1", "Biogenic silica decomposition rate", default = 6.41e-8_rk)
 
-        ! Initiate aggregate variables
+        ! Zooplankton
+        call self%get_parameter(self%pi11, "pi11", "[0-1]", "Mesozooplankton prey preference for diatoms", default = 0.333_rk)
+        call self%get_parameter(self%pi12, "pi12", "[0-1]", "Mesozooplankton prey preference for microzooplankton", default = 0.333_rk)
+        call self%get_parameter(self%pi13, "pi13", "[0-1]", "Mesozooplankton prey preference for detritus", default = 0.333_rk)
+        call self%get_parameter(self%pi21, "pi21", "[0-1]", "Microzooplankton prey preference for flagellates", default = 0.5_rk)
+        call self%get_parameter(self%pi22, "pi22", "[0-1]", "Microzooplankton prey preference for detritus", default = 0.5_rk)
+        call self%get_parameter(self%beta, "beta", "[0-1]", "Zooplankton assimilation efficiency", default = 0.75_rk)
+        call self%get_parameter(self%mju2, "mju2", "d-1", "Maximum loss rate of zooplankton", default = 0.2_rk)
+        call self%get_parameter(self%delta, "delta", "[0-1]", "Fraction of zooplankton losses to detritus", default = 0.6_rk)
+        call self%get_parameter(self%eps, "eps", "[0-1]", "Fraction of zooplankton losses to nitrate", default = 0.4_rk)
+        call self%get_parameter(self%mes_g, "mes_g", "d-1", "Mesozooplankton maximum growth rate", default = 0.4_rk)
+        call self%get_parameter(self%mic_g, "mic_g", "d-1", "Microzooplankton maximum growth rate", default = 0.5_rk)
+        call self%get_parameter(self%k3, "k3", "mmol m-3", "Half-saturation constant for zooplankton ingestion", default = 1.0_rk)
+        call self%get_parameter(self%k6, "k6", "mmol m-3", "Half-saturation constant for zooplankton loss", default = 0.2_rk)
+        call self%get_parameter(self%q10, "q10", "", "Temperature dependence on zooplankton growth", default = 1.5_rk)
+
+        !----- Initialize aggregated variables -----!
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_nit)
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_det)
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_dia)
@@ -245,6 +285,10 @@ contains
         real(rk) :: prod_dia, resp_dia, mort_dia, prod_fla, resp_fla, mort_fla
         real(rk) :: dnit, dpho, dsil, dsis, ddet, doxy, ddia, dfla
         real(rk) :: gpp, npp, chla
+        real(rk) :: mes, mic, dmes, dmic
+        real(rk) :: denum, p11, p12, p13, p21, p22, tmp, g11, g12, g13, g21, g22
+        real(rk) :: dia_mes, mic_mes, det_mes, mes_det, mes_nit
+        real(rk) :: fla_mic, det_mic, mic_det, mic_nit
 
         _LOOP_BEGIN_
 
@@ -260,6 +304,8 @@ contains
         _GET_(self%id_oxy, oxy)
         _GET_(self%id_dia, dia)
         _GET_(self%id_fla, fla)
+        _GET_(self%id_mes, mes)
+        _GET_(self%id_mic, mic)
 
         ! Convert watts to micro einstein
         rad = par / 0.217_rk ! W m-2 -> uE m-2 s-1
@@ -297,20 +343,56 @@ contains
             mort_fla = 0.0_rk
         end if
 
-        ! Primary production
+        ! Primary production and chlorophyll a
         gpp = self%scc2 * (prod_dia + prod_fla)
         npp = self%scc2 * (prod_dia + prod_fla - (resp_dia + resp_fla))
         chla = (dia + fla) / self%n2chla
-     
+
+        !----- Zooplankton terms -----!
+
+        ! Mesozooplankton
+        denum = self%pi11 * dia + self%pi12 * mic + self%pi13 * det + eps
+        p11 = self%pi11 * dia / denum
+        p12 = self%pi12 * mic / denum
+        p13 = self%pi13 * det / denum
+        tmp = (tfac(temp) * self%mes_g) / (self%cnit * self%k3 + p11 * dia + p12 * mic + p13 * det)
+        g11 = tmp * p11 * dia * mes
+        g12 = tmp * p12 * mic * mes
+        g13 = tmp * p13 * det * mes
+
+        dia_mes = g11 / day_sec
+        mic_mes = g12 / day_sec
+        det_mes = g13 / day_sec
+        
+        mes_det = (self%delta * self%mju2 * (mes / (mes + self%cnit * self%k6)) * mes + &
+            (1.0_rk - self%beta) * (g11 + g12 + g13)) / day_sec
+        mes_nit = (self%eps * self%mju2 * (mes / (mes + self%cnit * self%k6)) * mes) / day_sec
+        
+        ! Microzooplankton
+        denum = self%pi21 * fla + self%pi22 * det + eps
+        p21 = self%pi21 * fla / denum
+        p22 = self%pi22 * det / denum
+        tmp = (tfac(temp) * self%mic_g) / (self%cnit * self%k3 + p21 * fla + p22 * det)
+        g21 = tmp * p21 * fla * mic
+        g22 = tmp * p22 * det * mic
+
+        fla_mic = g21 / day_sec
+        det_mic = g22 / day_sec
+        mic_det = (self%delta * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic + &
+            (1.0_rk - self%beta) * (g21 + g22)) / day_sec
+        mic_nit = (self%eps * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic) / day_sec
+        
         !----- Fluxes -----!
-        dnit = resp_dia + resp_fla + self%cc4 * det - (prod_dia + prod_fla)
+        dnit = resp_dia + resp_fla + self%cc4 * det + mes_nit + mic_nit - (prod_dia + prod_fla)
         dpho = self%cc1 * dnit
         dsil = self%scc4 * sis - self%cc2 * prod_dia
-        dsis = self%cc2 * (resp_dia + mort_dia) - self%scc4 * sis
-        ddet = mort_dia + mort_fla - self%cc4 * det
-        doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det))) * 1e-3 ! mg m-3 -> mg l
-        ddia = prod_dia - (resp_dia + mort_dia)
-        dfla = prod_fla - (resp_fla + mort_fla)
+        dsis = self%cc2 * (resp_dia + mort_dia + dia_mes) - self%scc4 * sis
+        ddet = mort_dia + mort_fla + mes_det + mic_det - (self%cc4 * det + det_mes + det_mic)
+        doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det + mes_nit + mic_nit))) * 1e-3 ! mg m-3 -> mg l
+        ddia = prod_dia - (resp_dia + mort_dia + dia_mes)
+        dfla = prod_fla - (resp_fla + mort_fla + fla_mic)
+        dmes = dia_mes + mic_mes + det_mes - (mes_det + mes_nit)
+        dmic = fla_mic + det_mic - (mic_mes + mic_det + mic_nit)
 
         !----- Update FABM -----!
         _ADD_SOURCE_(self%id_nit, dnit)
@@ -321,6 +403,8 @@ contains
         _ADD_SOURCE_(self%id_oxy, doxy)
         _ADD_SOURCE_(self%id_dia, ddia)
         _ADD_SOURCE_(self%id_fla, dfla)
+        _ADD_SOURCE_(self%id_mes, dmes)
+        _ADD_SOURCE_(self%id_mic, dmic)
 
         _SET_DIAGNOSTIC_(self%id_totsil, sil+sis)
         _SET_DIAGNOSTIC_(self%id_gpp, gpp)
@@ -342,6 +426,12 @@ contains
                 slim = s / (s + (pmax / alpha))
             end if
         end function slim
+
+        !> Calculates temperature dependence on zooplankton growth
+        real(rk) function tfac(te)
+            real(rk), intent(in) :: te !! Temperature [degC]
+            tfac = self%q10**((te - 10.0_rk)/10.0_rk)
+        end function tfac
 
     end subroutine do
 
