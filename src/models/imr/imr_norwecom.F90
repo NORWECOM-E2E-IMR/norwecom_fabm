@@ -32,6 +32,7 @@ module imr_norwecom
         type(type_diagnostic_variable_id) :: id_gpp !! Gross primary production
         type(type_diagnostic_variable_id) :: id_npp !! Net primary production
         type(type_diagnostic_variable_id) :: id_totsil !! Total silicate concentration
+        type(type_diagnostic_variable_id) :: id_totpho !! Total phosphate concentration
 
         ! Define dependencies
         type(type_dependency_id) :: id_temp !! Temperature
@@ -124,14 +125,14 @@ contains
         call self%register_state_variable(self%id_det, "det", "mgN m-3", "Nitrogen detritus concentration", &
             minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.47e-5_rk)
         call self%register_state_variable(self%id_detp, "detp", "mgP m-3", "Phosphorus detritus concentration", &
-            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.45e-5_rk)
+            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.47e-5_rk)
         call self%register_state_variable(self%id_oxy, "oxy", "mg l-1", "Dissolved oxygen concentration", &
             minimum = 0.0_rk, initial_value = 10.0_rk)
         call self%register_state_variable(self%id_dia, "dia", "mgN m-3", "Diatoms concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk)
         call self%register_state_variable(self%id_fla, "fla", "mgN m-3", "Flagellates concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk, vertical_movement = -2.89e-6_rk)
-            call self%register_state_variable(self%id_mic, "mic", "mgN m-3", "Microzooplankton concentraton", &
+        call self%register_state_variable(self%id_mic, "mic", "mgN m-3", "Microzooplankton concentraton", &
             minimum = 0.0001_rk, initial_value = 0.1_rk)
         call self%register_state_variable(self%id_mes, "mes", "mgN m-3", "Mesozooplankton concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk)
@@ -141,6 +142,7 @@ contains
         call self%register_diagnostic_variable(self%id_gpp, "gpp", "mgC m-3", "Gross primary production")
         call self%register_diagnostic_variable(self%id_npp, "npp", "mgC m-3", "Net primary production")
         call self%register_diagnostic_variable(self%id_totsil, "totsis", "mgSi m-3", "Total silicate concentration")
+        call self%register_diagnostic_variable(self%id_totpho, "totpho", "mgP m-3", "Total phosphate concentration")
 
         !----- Initialize dependencies -----!
         call self%register_dependency(self%id_temp, standard_variables%temperature)
@@ -283,7 +285,7 @@ contains
         real(rk) :: temp, nit, pho, sil, sis, det, detp, oxy, dia, fla, par, rad
         real(rk) :: umax, rad_lim, nit_lim, pho_lim, sil_lim
         real(rk) :: prod_dia, resp_dia, mort_dia, prod_fla, resp_fla, mort_fla
-        real(rk) :: dnit, dpho, dsil, dsis, ddet, doxy, ddia, dfla
+        real(rk) :: dnit, dpho, dsil, dsis, ddet, doxy, ddia, dfla, ddetp
         real(rk) :: gpp, npp, chla
         real(rk) :: mes, mic, dmes, dmic
         real(rk) :: denum, p11, p12, p13, p21, p22, tmp, g11, g12, g13, g21, g22
@@ -383,12 +385,19 @@ contains
         mic_nit = (self%eps * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic) / day_sec
         
         !----- Fluxes -----!
-        dnit = resp_dia + resp_fla + self%cc4 * det + mes_nit + mic_nit - (prod_dia + prod_fla)
-        dpho = self%cc1 * dnit
+        dnit = resp_dia + resp_fla + 0.10_rk * (mort_dia + mort_fla) + self%cc4 * det + &
+            mes_nit + mic_nit - (prod_dia + prod_fla)
+        dpho = self%cc1 * (resp_dia + resp_fla + 0.25_rk * (mort_dia + mort_fla) + mes_nit + mic_nit - &
+            (prod_dia + prod_fla)) + 1.3_rk * self%cc4 * detp
+        ! dpho = self%cc1 * (resp_dia + resp_fla + 1.3_rk * self%cc4 * detp + &
+        !     0.25_rk * (mort_dia + mort_fla) + mes_nit + mic_nit - (prod_dia + prod_fla)) 
         dsil = self%scc4 * sis - self%cc2 * prod_dia
         dsis = self%cc2 * (resp_dia + mort_dia + dia_mes) - self%scc4 * sis
-        ddet = mort_dia + mort_fla + mes_det + mic_det - (self%cc4 * det + det_mes + det_mic)
-        doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det + mes_nit + mic_nit))) * 1e-3 ! mg m-3 -> mg l
+        ddet = 0.9_rk * (mort_dia + mort_fla) + mes_det + mic_det - (self%cc4 * det + det_mes + det_mic)
+        ddetp = self%cc1 * (0.75_rk * (mort_dia + mort_fla) + mes_det + mic_det - &
+            (det_mes + det_mic)) - 1.3_rk * self%cc4 * detp
+        doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det + &
+            mes_nit + mic_nit))) * 1e-3 ! mg m-3 -> mg l
         ddia = prod_dia - (resp_dia + mort_dia + dia_mes)
         dfla = prod_fla - (resp_fla + mort_fla + fla_mic)
         dmes = dia_mes + mic_mes + det_mes - (mes_det + mes_nit)
@@ -400,6 +409,7 @@ contains
         _ADD_SOURCE_(self%id_sil, dsil)
         _ADD_SOURCE_(self%id_sis, dsis)
         _ADD_SOURCE_(self%id_det, ddet)
+        _ADD_SOURCE_(self%id_detp, ddetp)
         _ADD_SOURCE_(self%id_oxy, doxy)
         _ADD_SOURCE_(self%id_dia, ddia)
         _ADD_SOURCE_(self%id_fla, dfla)
@@ -407,6 +417,7 @@ contains
         _ADD_SOURCE_(self%id_mic, dmic)
 
         _SET_DIAGNOSTIC_(self%id_totsil, sil+sis)
+        _SET_DIAGNOSTIC_(self%id_totpho, pho+detp)
         _SET_DIAGNOSTIC_(self%id_gpp, gpp)
         _SET_DIAGNOSTIC_(self%id_npp, npp)
         _SET_DIAGNOSTIC_(self%id_chla, chla)
