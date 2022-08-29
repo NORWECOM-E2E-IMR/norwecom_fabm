@@ -31,6 +31,8 @@ module imr_norwecom
         type(type_diagnostic_variable_id) :: id_chla !! Chlorophyll a
         type(type_diagnostic_variable_id) :: id_gpp !! Gross primary production
         type(type_diagnostic_variable_id) :: id_npp !! Net primary production
+        type(type_diagnostic_variable_id) :: id_gsp !! Gross secondary production
+        type(type_diagnostic_variable_id) :: id_nsp !! Net secondary production
         type(type_diagnostic_variable_id) :: id_totsil !! Total silicate concentration
         type(type_diagnostic_variable_id) :: id_totpho !! Total phosphate concentration
 
@@ -139,8 +141,10 @@ contains
 
         !----- Initialize diagnostic variables -----!
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
-        call self%register_diagnostic_variable(self%id_gpp, "gpp", "mgC m-3", "Gross primary production")
-        call self%register_diagnostic_variable(self%id_npp, "npp", "mgC m-3", "Net primary production")
+        call self%register_diagnostic_variable(self%id_gpp, "gpp", "mgC m-3 s-1", "Gross primary production")
+        call self%register_diagnostic_variable(self%id_npp, "npp", "mgC m-3 s-1", "Net primary production")
+        call self%register_diagnostic_variable(self%id_gsp, "gsp", "mgC m-3 s-1", "Gross secondary production")
+        call self%register_diagnostic_variable(self%id_nsp, "nsp", "mgC m-3 s-1", "Net secondary production")
         call self%register_diagnostic_variable(self%id_totsil, "totsis", "mgSi m-3", "Total silicate concentration")
         call self%register_diagnostic_variable(self%id_totpho, "totpho", "mgP m-3", "Total phosphate concentration")
 
@@ -286,7 +290,7 @@ contains
         real(rk) :: umax, rad_lim, nit_lim, pho_lim, sil_lim
         real(rk) :: prod_dia, resp_dia, mort_dia, prod_fla, resp_fla, mort_fla
         real(rk) :: dnit, dpho, dsil, dsis, ddet, doxy, ddia, dfla, ddetp
-        real(rk) :: gpp, npp, chla
+        real(rk) :: gpp, npp, chla, gsp, nsp
         real(rk) :: mes, mic, dmes, dmic
         real(rk) :: denum, p11, p12, p13, p21, p22, tmp, g11, g12, g13, g21, g22
         real(rk) :: dia_mes, mic_mes, det_mes, mes_det, mes_nit
@@ -383,8 +387,15 @@ contains
         mic_det = (self%delta * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic + &
             (1.0_rk - self%beta) * (g21 + g22)) / day_sec
         mic_nit = (self%eps * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic) / day_sec
-        
+
+        ! Zooplankton production
+        gsp = self%scc2 * self%beta * (dia_mes + mic_mes + det_mes + fla_mic + det_mic)
+        nsp = gsp - self%scc2 * (mes_nit + mic_nit) ! + &
+            !((self%delta * self%mju2 * (mes / (mes + self%cnit * self%k6)) * mes) + &
+            !(self%delta * self%mju2 * (mic / (mic + self%cnit * self%k6)) * mic)) / day_sec)
+
         !----- Fluxes -----!
+        
         dnit = resp_dia + resp_fla + 0.10_rk * (mort_dia + mort_fla) + self%cc4 * det + &
             mes_nit + mic_nit - (prod_dia + prod_fla)
         dpho = self%cc1 * (resp_dia + resp_fla + 0.25_rk * (mort_dia + mort_fla) + mes_nit + mic_nit - &
@@ -420,6 +431,8 @@ contains
         _SET_DIAGNOSTIC_(self%id_totpho, pho+detp)
         _SET_DIAGNOSTIC_(self%id_gpp, gpp)
         _SET_DIAGNOSTIC_(self%id_npp, npp)
+        _SET_DIAGNOSTIC_(self%id_gsp, gsp)
+        _SET_DIAGNOSTIC_(self%id_nsp, nsp)
         _SET_DIAGNOSTIC_(self%id_chla, chla)
 
         _LOOP_END_
