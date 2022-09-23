@@ -35,6 +35,10 @@ module imr_norwecom
         type(type_diagnostic_variable_id) :: id_nsp !! Net secondary production
         type(type_diagnostic_variable_id) :: id_totsil !! Total silicate concentration
         type(type_diagnostic_variable_id) :: id_totpho !! Total phosphate concentration
+        type(type_diagnostic_variable_id) :: id_radlim !! Light limitation
+        type(type_diagnostic_variable_id) :: id_nitlim !! Nitrate limitation
+        type(type_diagnostic_variable_id) :: id_pholim !! Phosphate limitation
+        type(type_diagnostic_variable_id) :: id_sillim !! Silicate limitation
 
         ! Define dependencies
         type(type_dependency_id) :: id_temp !! Temperature
@@ -76,6 +80,7 @@ module imr_norwecom
         real(rk) :: n2chla !! Cellular fraction of nitrate and chlorophyll a
         real(rk) :: srdia_min !! Minimum diatoms sinking rate
         real(rk) :: srdia_max !! Maximum diatoms sinking rate
+        real(rk) :: srdet !! Detritus sinking rate
         real(rk) :: sib !! Si concentration with diatom max sinking rate
         real(rk) :: scc1 !! O/N consumption rate
         real(rk) :: scc2 !! Intercellular C/N ratio
@@ -94,12 +99,15 @@ module imr_norwecom
         real(rk) :: eps !! Fraction of zooplankton losses to nitrate
         real(rk) :: mes_g !! Mesozooplankton maximum growth rate
         real(rk) :: mic_g !! Microzooplankton maximum growth rate
+        real(rk) :: v !! Chlorophyll a extinction coefficient
+        real(rk) :: pvel !! Air-water oxygen exchange factor
 
     contains
         procedure :: initialize
         procedure :: do_surface
         procedure :: do
         procedure :: get_vertical_movement
+        procedure :: get_light_extinction
     end type
 
 contains
@@ -125,10 +133,10 @@ contains
         call self%register_state_variable(self%id_sis, "sis", "mgSi m-3", "Biogenic silica concentration", &
             minimum = 0.0_rk, initial_value = 3.0_rk, vertical_movement = -3.47e-5_rk)
         call self%register_state_variable(self%id_det, "det", "mgN m-3", "Nitrogen detritus concentration", &
-            minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.47e-5_rk)
+            minimum = 0.0_rk, initial_value = 0.1_rk)
         call self%register_state_variable(self%id_detp, "detp", "mgP m-3", "Phosphorus detritus concentration", &
             minimum = 0.0_rk, initial_value = 0.1_rk, vertical_movement = -3.47e-5_rk)
-        call self%register_state_variable(self%id_oxy, "oxy", "mg l-1", "Dissolved oxygen concentration", &
+        call self%register_state_variable(self%id_oxy, "oxy", "mg m-3", "Dissolved oxygen concentration", &
             minimum = 0.0_rk, initial_value = 10.0_rk)
         call self%register_state_variable(self%id_dia, "dia", "mgN m-3", "Diatoms concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk)
@@ -147,6 +155,10 @@ contains
         call self%register_diagnostic_variable(self%id_nsp, "nsp", "mgC m-3 s-1", "Net secondary production")
         call self%register_diagnostic_variable(self%id_totsil, "totsis", "mgSi m-3", "Total silicate concentration")
         call self%register_diagnostic_variable(self%id_totpho, "totpho", "mgP m-3", "Total phosphate concentration")
+        call self%register_diagnostic_variable(self%id_radlim, "radlim", "[0-1]", "Light limitation")
+        call self%register_diagnostic_variable(self%id_nitlim, "nitlim", "[0-1]", "Nitrate limitation")
+        call self%register_diagnostic_variable(self%id_pholim, "pholim", "[0-1]", "Phosphate limitation")
+        call self%register_diagnostic_variable(self%id_sillim, "sillim", "[0-1]", "Silicate limitation")
 
         !----- Initialize dependencies -----!
         call self%register_dependency(self%id_temp, standard_variables%temperature)
@@ -199,9 +211,14 @@ contains
         call self%get_parameter(self%srdia_min, "srdia_min", "mgN m-3", "Minimum diatoms sinking rate", default = 3.47e-6_rk)
         call self%get_parameter(self%srdia_max, "srdia_max", "mgN m-3", "Maximum diatoms sinking rate", default = 3.47e-5_rk)
         call self%get_parameter(self%sib, "sib", "uM", "Si concentration with diatom max sinking rate", default = 1.0_rk)
+        call self%get_parameter(self%srdet, "srdet", "s-1", "Detritus sinking rate", default = -3.47e-5_rk)
         call self%get_parameter(self%scc1, "scc1", "mgO mgN-1", "O/N consumption rate", default = 19.71_rk)
         call self%get_parameter(self%scc2, "scc2", "mgC mgN-1", "Intercellular C/N ratio", default = 5.68_rk)
         call self%get_parameter(self%scc4, "scc4", "s-1", "Biogenic silica decomposition rate", default = 6.41e-8_rk)
+
+        ! Light
+        call self%get_parameter(self%v, "v", "m mgChla-1", "Chlorophyll a extinction coefficient", default = 1.38e-2_rk)
+        call self%get_parameter(self%pvel, "pvel", "-", "Air-water oxygen exchange factor", default = 5.0_rk)
 
         ! Zooplankton
         call self%get_parameter(self%pi11, "pi11", "[0-1]", "Mesozooplankton prey preference for diatoms", default = 0.333_rk)
@@ -258,7 +275,6 @@ contains
         ! Temporary variables
         real(rk) :: temp, salt, dens, oxy
         real(rk) :: tempk, pvel, osat, doxy
-        pvel = 5.0_rk
 
         _SURFACE_LOOP_BEGIN_
 
@@ -271,8 +287,8 @@ contains
         osat = exp(-173.9894 + 255.5907 / tempk + 146.4813 * log(tempk) - 22.2040 * tempk + &
             salt * (-0.037376 + 0.016504 * tempk - 0.0020564 * tempk * tempk)) ! mol kg-1
         osat = osat * dens ! mol m-3
-        osat = osat * 32.0 * 1e-6 ! mg m-3
-        doxy = (pvel / 86400.0) * (osat - oxy)
+        osat = osat * 32.0 * 1e-3_rk ! mg m-3
+        doxy = (self%pvel / 86400.0) * (osat - oxy)
 
         _ADD_SURFACE_FLUX_(self%id_oxy, doxy)
 
@@ -343,6 +359,11 @@ contains
         resp_fla = self%a5 * fla * exp(self%a6 * temp)
         mort_fla = self%cc3 * fla
 
+        _SET_DIAGNOSTIC_(self%id_radlim, rad_lim)
+        _SET_DIAGNOSTIC_(self%id_nitlim, nit_lim)
+        _SET_DIAGNOSTIC_(self%id_pholim, pho_lim)
+        _SET_DIAGNOSTIC_(self%id_sillim, sil_lim)
+
         ! Constrain flagellate losses
         if (fla < self%flamin) then
             resp_fla = 0.0_rk
@@ -407,8 +428,8 @@ contains
         ddet = 0.9_rk * (mort_dia + mort_fla) + mes_det + mic_det - (self%cc4 * det + det_mes + det_mic)
         ddetp = self%cc1 * (0.75_rk * (mort_dia + mort_fla) + mes_det + mic_det - &
             (det_mes + det_mic)) - 1.3_rk * self%cc4 * detp
-        doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det + &
-            mes_nit + mic_nit))) * 1e-3 ! mg m-3 -> mg l
+        ! doxy = (self%scc1 * (prod_dia + prod_fla - (resp_dia + resp_fla + self%cc4 * det + mes_nit + mic_nit))) * 1e-3_rk
+        doxy = -1.0_rk * self%scc1 * dnit
         ddia = prod_dia - (resp_dia + mort_dia + dia_mes)
         dfla = prod_fla - (resp_fla + mort_fla + fla_mic)
         dmes = dia_mes + mic_mes + det_mes - (mes_det + mes_nit)
@@ -485,8 +506,33 @@ contains
         if (dia < self%diamin) vdia = 0.0_rk
 
         _ADD_VERTICAL_VELOCITY_(self%id_dia, -1.0 * vdia)
+        _ADD_VERTICAL_VELOCITY_(self%id_det, self%srdet)
 
         _LOOP_END_
     end subroutine get_vertical_movement
+
+    subroutine get_light_extinction(self,_ARGUMENTS_GET_EXTINCTION_)
+        class (type_imr_norwecom), intent(in) :: self
+        _DECLARE_ARGUMENTS_GET_EXTINCTION_
+
+        real(rk) :: dia, fla
+        real(rk) :: my_extinction
+     
+        ! Enter spatial loops (if any)
+        _LOOP_BEGIN_
+     
+       ! Retrieve current (local) state variable values.
+        _GET_(self%id_dia, dia)
+        _GET_(self%id_fla, fla)
+
+
+        my_extinction = self%v * ((dia + fla)/self%n2chla)
+
+       _SET_EXTINCTION_( my_extinction )
+     
+       ! Leave spatial loops (if any)
+        _LOOP_END_
+     
+       end subroutine get_light_extinction
 
 end module imr_norwecom
