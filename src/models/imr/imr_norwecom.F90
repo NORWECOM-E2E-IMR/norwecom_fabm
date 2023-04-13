@@ -31,6 +31,12 @@ module imr_norwecom
         type(type_state_variable_id) :: id_fla !! Flagellates
         type(type_state_variable_id) :: id_mic !! Microzooplankton
         type(type_state_variable_id) :: id_mes !! Mesozooplankton
+        type(type_bottom_state_variable_id) :: id_botdet !! Bottom nitrogen detritus
+        type(type_bottom_state_variable_id) :: id_botdetp !! Bottom phosphorus detritus
+        type(type_bottom_state_variable_id) :: id_botsis !! Bottom biogenic silica
+        type(type_bottom_state_variable_id) :: id_burdet !! Burried nitrogen detritus
+        type(type_bottom_state_variable_id) :: id_burdetp !! Burried phosphorus detritus
+        type(type_bottom_state_variable_id) :: id_bursis !! Burried biogenic silica
 
         ! Diagnostic variables
         type(type_diagnostic_variable_id) :: id_chla !! Chlorophyll a
@@ -50,6 +56,7 @@ module imr_norwecom
         type(type_dependency_id) :: id_salt !! Salinity
         type(type_dependency_id) :: id_dens !! Density
         type(type_dependency_id) :: id_par !! Photoactive radition
+        type(type_horizontal_dependency_id) :: id_bstress !! Bottom stress
 
         ! Parameters
         real(rk) :: cnit !! Nitrogen atomic weight
@@ -106,10 +113,14 @@ module imr_norwecom
         real(rk) :: mic_g !! Microzooplankton maximum growth rate
         real(rk) :: v !! Chlorophyll a extinction coefficient
         real(rk) :: pvel !! Air-water oxygen exchange factor
+        real(rk) :: tau1 !! Bottom stress threshold for sedimentation
+        real(rk) :: tau2 !! Bottom stress threshold for resuspension
+        real(rk) :: c2 !! Slope of the linear increase in bottom flux
     contains
         procedure :: initialize
         procedure :: do_surface
         procedure :: do
+        procedure :: do_bottom
         procedure :: get_vertical_movement
         procedure :: get_light_extinction
     end type
@@ -127,6 +138,10 @@ module imr_norwecom
             class(type_imr_norwecom), intent(in) :: self
             _DECLARE_ARGUMENTS_DO_
         end subroutine do
+        module subroutine do_bottom(self, _ARGUMENTS_DO_BOTTOM_)
+            class(type_imr_norwecom), intent(in) :: self
+            _DECLARE_ARGUMENTS_DO_BOTTOM_
+        end subroutine do_bottom
         module subroutine get_vertical_movement(self, _ARGUMENTS_GET_VERTICAL_MOVEMENT_)
             class(type_imr_norwecom), intent(in) :: self
             _DECLARE_ARGUMENTS_GET_VERTICAL_MOVEMENT_

@@ -35,6 +35,18 @@ contains
             minimum = 0.0001_rk, initial_value = 0.1_rk)
         call self%register_state_variable(self%id_mes, "mes", "mgN m-3", "Mesozooplankton concentration", &
             minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_bottom_state_variable(self%id_botdet, "botdet", "mgN m-2", "Bottom nitrogen detritus", &
+            & minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_bottom_state_variable(self%id_botdetp, "botdetp", "mgP m-2", "Bottom phosphorus detritus", &
+            & minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_bottom_state_variable(self%id_botsis, "botsis", "mgSi m-2", "Bottom biogenic silica", &
+            & minimum = 0.0001_rk, initial_value = 0.1_rk)
+        call self%register_bottom_state_variable(self%id_burdet, "burdet", "mgN m-2", "Burried nitrogen detritus", &
+            & minimum = 0.0_rk, initial_value = 0.0_rk)
+        call self%register_bottom_state_variable(self%id_burdetp, "butdetp", "mgP m-2", "Burried phosphorus detritus", &
+            & minimum = 0.0_rk, initial_value = 0.0_rk)
+        call self%register_bottom_state_variable(self%id_bursis, "bursis", "mgSi m-2", "Burried biogenic silica", &
+            & minimum = 0.0_rk, initial_value = 0.0_rk)
 
         !----- Initialize diagnostic variables -----!
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
@@ -54,6 +66,7 @@ contains
         call self%register_dependency(self%id_salt, standard_variables%practical_salinity)
         call self%register_dependency(self%id_dens, standard_variables%density)
         call self%register_dependency(self%id_par, standard_variables%downwelling_photosynthetic_radiative_flux)
+        call self%register_horizontal_dependency(self%id_bstress, standard_variables%bottom_stress)
 
         !----- Initialize parameters -----!
 
@@ -124,6 +137,11 @@ contains
         call self%get_parameter(self%k3, "k3", "mmol m-3", "Half-saturation constant for zooplankton ingestion", default = 1.0_rk)
         call self%get_parameter(self%k6, "k6", "mmol m-3", "Half-saturation constant for zooplankton loss", default = 0.2_rk)
         call self%get_parameter(self%q10, "q10", "", "Temperature dependence on zooplankton growth", default = 1.5_rk)
+
+        ! Sediment
+        call self%get_parameter(self%tau1, "tau1", "Pa", "Bottom stress threshold for sedimentation", default = 0.064_rk)
+        call self%get_parameter(self%tau2, "tau2", "Pa", "Bottom stress threshold for resuspension", default = 0.78_rk)
+        call self%get_parameter(self%c2, "c2", "s m-1", "Slope of the linear increase in bottom flux", default = 100.0_rk)
 
         !----- Initialize aggregated variables -----!
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_nit)

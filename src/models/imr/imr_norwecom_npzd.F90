@@ -122,6 +122,71 @@ contains
 
     end subroutine do
 
+    module subroutine do_bottom(self, _ARGUMENTS_DO_BOTTOM_)
+        !! This subroutine performs processes located in the bottom water (mortality), 
+        !! in the sediment (burial) as well as between the water-bottom interface
+        !! (sedimentation and resuspension). See todo!
+        !!
+        !! TODO:
+        !! - Add mortality of living organism
+        !! - Add sediment burial
+        !! - Add leakage (remineralization) from the sediment to the water
+        !!   including oxygen usage from the water
+        !! - Add denitrification in the sediment
+        class(type_imr_norwecom), intent(in) :: self !! NORWECOM FABM model type
+        _DECLARE_ARGUMENTS_DO_BOTTOM_
+
+        ! Local variables
+        real(rk) :: bstress
+        real(rk) :: det, detp, sis, botdet, botdetp, botsis, burdet, burdetp, bursis
+        real(rk) :: detflux, detpflux, sisflux, bstress_mg, tau2_mg, totsed
+
+        _BOTTOM_LOOP_BEGIN_
+
+        _GET_HORIZONTAL_(self%id_bstress, bstress)
+        _GET_HORIZONTAL_(self%id_botdet, botdet)
+        _GET_HORIZONTAL_(self%id_botdetp, botdetp)
+        _GET_HORIZONTAL_(self%id_botsis, botsis)
+        _GET_HORIZONTAL_(self%id_burdet, burdet)
+        _GET_HORIZONTAL_(self%id_burdetp, burdetp)
+        _GET_HORIZONTAL_(self%id_bursis, bursis)
+        
+        _GET_(self%id_det, det)
+        _GET_(self%id_detp, detp)
+        _GET_(self%id_sis, sis)
+
+        ! Convert units to mg m-1 s-2
+        bstress_mg = bstress/1000.0_rk
+        tau2_mg = self%tau2/1000.0_rk
+
+        ! Sedimentation and resuspension
+        if (bstress < self%tau1) then ! Sedimentation
+            detflux = self%srdet*det
+            detpflux = self%srdet*detp
+            sisflux = self%srdet*sis
+        else if (bstress > self%tau2) then ! Resuspension
+            totsed = (3355.0_rk/224.0_rk)*botdet + (60.0_rk/28.0_rk)*botsis
+            detflux = min(self%c2*(bstress_mg - tau2_mg)*(botdet/totsed), botdet)
+            detpflux = min(self%c2*(bstress_mg - tau2_mg)*(botdetp/totsed), botdetp)
+            sisflux = min(self%c2*(bstress_mg - tau2_mg)*(botsis/totsed), botsis)
+        else
+            detflux = 0.0_rk
+            detpflux = 0.0_rk
+            sisflux = 0.0_rk
+        end if
+
+        ! Update tracers in FABM
+        _ADD_BOTTOM_FLUX_(self%id_det, detflux)
+        _ADD_BOTTOM_FLUX_(self%id_detp, detpflux)
+        _ADD_BOTTOM_FLUX_(self%id_sis, sisflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botdet, -detflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botdetp, -detpflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botsis, -sisflux)
+
+        _BOTTOM_LOOP_END_
+
+    end subroutine do_bottom
+
     subroutine do_phytoplankton(self, temp, dia, fla, rad, nit, pho, sil, pdia, rdia, mdia, pfla, rfla, mfla, gpp, npp, chla)
         class(type_imr_norwecom), intent(in) :: self
         real(rk), intent(in) :: temp !! Temperature
