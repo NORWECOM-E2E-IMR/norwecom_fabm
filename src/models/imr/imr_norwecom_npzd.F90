@@ -129,7 +129,6 @@ contains
         !!
         !! TODO:
         !! - Add mortality of living organism
-        !! - Add sediment burial
         !! - Add leakage (remineralization) from the sediment to the water
         !!   including oxygen usage from the water
         !! - Add denitrification in the sediment
@@ -140,6 +139,7 @@ contains
         real(rk) :: bstress
         real(rk) :: det, detp, sis, botdet, botdetp, botsis, burdet, burdetp, bursis
         real(rk) :: detflux, detpflux, sisflux, bstress_mg, tau2_mg, totsed
+        real(rk) :: detburflux, detpburflux, sisburflux
 
         _BOTTOM_LOOP_BEGIN_
 
@@ -175,13 +175,21 @@ contains
             sisflux = 0.0_rk
         end if
 
+        ! Sediment burial
+        detburflux = self%scc8*max(botdet - self%detbul, 0.0_rk)
+        detpburflux = self%scc8*max(botdetp - self%detpbul, 0.0_rk)
+        sisburflux = self%scc8*max(botsis - self%sisbul, 0.0_rk)
+
         ! Update tracers in FABM
         _ADD_BOTTOM_FLUX_(self%id_det, detflux)
         _ADD_BOTTOM_FLUX_(self%id_detp, detpflux)
         _ADD_BOTTOM_FLUX_(self%id_sis, sisflux)
-        _ADD_BOTTOM_SOURCE_(self%id_botdet, -detflux)
-        _ADD_BOTTOM_SOURCE_(self%id_botdetp, -detpflux)
-        _ADD_BOTTOM_SOURCE_(self%id_botsis, -sisflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botdet, -detflux - detburflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botdetp, -detpflux - detpburflux)
+        _ADD_BOTTOM_SOURCE_(self%id_botsis, -sisflux - sisburflux)
+        _ADD_BOTTOM_SOURCE_(self%id_burdet, detburflux)
+        _ADD_BOTTOM_SOURCE_(self%id_burdetp, detpburflux)
+        _ADD_BOTTOM_SOURCE_(self%id_bursis, sisburflux)
 
         _BOTTOM_LOOP_END_
 

@@ -116,6 +116,12 @@ module imr_norwecom
         real(rk) :: tau1 !! Bottom stress threshold for sedimentation
         real(rk) :: tau2 !! Bottom stress threshold for resuspension
         real(rk) :: c2 !! Slope of the linear increase in bottom flux
+        real(rk) :: scc8 !! Burial rate (120 days)
+        real(rk) :: detbul !! Detritus burial lower limit
+        real(rk) :: detmax !! Detritus concentration corresponding to max nitrogen flux
+        real(rk) :: sisbul !! Biogenic silica burial lower limit
+        real(rk) :: detpbul !! Phosphorus burial lower limit
+
     contains
         procedure :: initialize
         procedure :: do_surface

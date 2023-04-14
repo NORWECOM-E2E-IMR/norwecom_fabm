@@ -142,6 +142,11 @@ contains
         call self%get_parameter(self%tau1, "tau1", "Pa", "Bottom stress threshold for sedimentation", default = 0.064_rk)
         call self%get_parameter(self%tau2, "tau2", "Pa", "Bottom stress threshold for resuspension", default = 0.78_rk)
         call self%get_parameter(self%c2, "c2", "s m-1", "Slope of the linear increase in bottom flux", default = 100.0_rk)
+        call self%get_parameter(self%scc8, "scc8", "s-1", "Burial rate (120 days)", default = 9.65e-8_rk)
+        call self%get_parameter(self%detbul, "detbul", "mg m-2", "Detritus burial lower limit", default = 630.0_rk)
+        call self%get_parameter(self%detmax, "detmax", "mg m-2", "Detritus concentration corresponding to max nitrogen flux", default = 100000.0_rk)
+        call self%get_parameter(self%sisbul, "sisbul", "mg m-2", "Biogenic silica burial lower limit", default = 1100.0_rk)
+        call self%get_parameter(self%detpbul, "detpbul", "mg m-2", "Phosphorus detritus burial lower limit", default = 63.0_rk)
 
         !----- Initialize aggregated variables -----!
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_nit)
