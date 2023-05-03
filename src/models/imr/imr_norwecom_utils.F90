@@ -13,6 +13,7 @@ contains
         _DECLARE_ARGUMENTS_GET_VERTICAL_MOVEMENT_
 
         real(rk) :: dia, sil, vdia, csil
+        real(rk) :: dsnk, meanspd, det
 
         csil = 28.09_rk
 
@@ -20,6 +21,10 @@ contains
 
         _GET_(self%id_dia, dia)
         _GET_(self%id_sil, sil)
+        if (self%use_community_sinking) then
+            _GET_(self%id_det, det)
+            _GET_(self%id_dsnk, dsnk)
+        end if
 
         if (sil / csil < self%sib) then
             vdia = self%srdia_max
@@ -31,7 +36,18 @@ contains
         if (dia < self%diamin) vdia = 0.0_rk
 
         _ADD_VERTICAL_VELOCITY_(self%id_dia, -1.0 * vdia)
-        _ADD_VERTICAL_VELOCITY_(self%id_det, self%srdet)
+
+        if (self%use_community_sinking) then
+            ! meanspd = dsnk / det
+            meanspd = -1.0_rk * dsnk
+            ! print *, "meanspd: ", meanspd
+            _ADD_VERTICAL_VELOCITY_(self%id_det, meanspd)
+            _ADD_VERTICAL_VELOCITY_(self%id_detp, meanspd)
+            _ADD_VERTICAL_VELOCITY_(self%id_dsnk, meanspd)
+        else
+            _ADD_VERTICAL_VELOCITY_(self%id_det, self%srdet)
+            _ADD_VERTICAL_VELOCITY_(self%id_detp, self%srdet)
+        end if
 
         _LOOP_END_
     end subroutine get_vertical_movement

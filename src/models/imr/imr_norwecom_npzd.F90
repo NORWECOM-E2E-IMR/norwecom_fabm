@@ -51,6 +51,9 @@ contains
         real(rk) :: g11, g12, g13, g21, g22
         real(rk) :: dia2mes, mic2mes, det2mes, mes2det, mes2nit
         real(rk) :: fla2mic, det2mic, mic2det, mic2nit
+        real(rk) :: dsnk, mean_snkspd, sinkdxxdet, rhs
+
+        real(rk) :: contr_dia2mes, contr_mic2mes
 
         _LOOP_BEGIN_
 
@@ -68,6 +71,9 @@ contains
         _GET_(self%id_fla, fla)
         _GET_(self%id_mes, mes)
         _GET_(self%id_mic, mic)
+        if (self%use_community_sinking) then
+            _GET_(self%id_dsnk, dsnk)
+        end if
 
         ! Convert watts to micro einstein
         rad = par / 0.217_rk ! W m-2 -> uE m-2 s-1
@@ -79,6 +85,32 @@ contains
         !----- Zooplankton terms -----!
         call do_zooplankton(self, temp, dia, fla, det, mic, mes, dia2mes, mic2mes, &
             & det2mes, fla2mic, det2mic, mes2det, mes2nit, mic2det, mic2nit, gsp, nsp)
+
+        if (self%use_community_sinking) then
+
+            ! print *, dsnk
+
+            sinkdxxdet = &
+                ! Contribution from assimilation loss
+                (1.0_rk - self%beta)*((dia2mes)*self%sr_dia2det &
+                + (det2mes)*self%sr_det2det + (mic2mes)*self%sr_mic2det &
+                + (fla2mic)*self%sr_fla2det + (det2mic)*self%sr_det2det) &
+                ! Contribution from zooplankton natural mortality
+                + (mic2det)*self%sr_mic2det + (mes2det)*self%sr_mes2det
+            ! print *, sinkdxxdet
+            
+
+            ! rhs = min(sinkdxxdet - (det2mic + det2mes)*dsnk/det - self%cc4*det*dsnk, 0.00001157)
+            ! rhs = sinkdxxdet - (det2mic + det2mes)*dsnk/det - self%cc4*det*dsnk
+            rhs = sinkdxxdet - self%cc4*det*dsnk
+            ! print *, dsnk, rhs, det, dsnk/det
+
+
+
+            _ADD_SOURCE_(self%id_dsnk, rhs)
+            ! _SET_DIAGNOSTIC_(self%id_snkspd, dsnk/det)
+            _SET_DIAGNOSTIC_(self%id_snkspd, dsnk)
+        end if
 
         !----- Fluxes -----!
         dnit = dia2nit + fla2nit + 0.10_rk*(dia2det + fla2det) + self%cc4*det &
@@ -140,6 +172,7 @@ contains
         real(rk) :: det, detp, sis, botdet, botdetp, botsis, burdet, burdetp, bursis
         real(rk) :: detflux, detpflux, sisflux, bstress_mg, tau2_mg, totsed
         real(rk) :: detburflux, detpburflux, sisburflux
+        real(rk) :: dsnk
 
         _BOTTOM_LOOP_BEGIN_
 
@@ -154,6 +187,11 @@ contains
         _GET_(self%id_det, det)
         _GET_(self%id_detp, detp)
         _GET_(self%id_sis, sis)
+        if (self%use_community_sinking) then
+            _GET_(self%id_dsnk, dsnk)
+        end if
+
+        ! TODO: finish this
 
         ! Convert units to mg m-1 s-2
         bstress_mg = bstress/1000.0_rk

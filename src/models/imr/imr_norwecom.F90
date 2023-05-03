@@ -38,6 +38,15 @@ module imr_norwecom
         type(type_bottom_state_variable_id) :: id_burdetp !! Burried phosphorus detritus
         type(type_bottom_state_variable_id) :: id_bursis !! Burried biogenic silica
 
+        ! Community sinking speed
+        type(type_state_variable_id) :: id_dsnk ! The variable that advects detritus sinking speeds
+        type(type_diagnostic_variable_id) :: id_snkspd ! Simulated average sinking speed
+        real(rk) :: sr_dia2det
+        real(rk) :: sr_fla2det
+        real(rk) :: sr_mes2det
+        real(rk) :: sr_mic2det
+        real(rk) :: sr_det2det
+
         ! Diagnostic variables
         type(type_diagnostic_variable_id) :: id_chla !! Chlorophyll a
         type(type_diagnostic_variable_id) :: id_gpp !! Gross primary production
@@ -121,6 +130,9 @@ module imr_norwecom
         real(rk) :: detmax !! Detritus concentration corresponding to max nitrogen flux
         real(rk) :: sisbul !! Biogenic silica burial lower limit
         real(rk) :: detpbul !! Phosphorus burial lower limit
+
+        ! NORWECOM modules
+        logical :: use_community_sinking ! Activates community composition dependent sinking rates
 
     contains
         procedure :: initialize

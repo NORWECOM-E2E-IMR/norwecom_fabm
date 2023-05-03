@@ -42,11 +42,11 @@ contains
         call self%register_bottom_state_variable(self%id_botsis, "botsis", "mgSi m-2", "Bottom biogenic silica", &
             & minimum = 0.0001_rk, initial_value = 0.1_rk)
         call self%register_bottom_state_variable(self%id_burdet, "burdet", "mgN m-2", "Burried nitrogen detritus", &
-            & minimum = 0.0_rk, initial_value = 0.0_rk)
+            & minimum = 0.0_rk, initial_value = 0.1_rk)
         call self%register_bottom_state_variable(self%id_burdetp, "butdetp", "mgP m-2", "Burried phosphorus detritus", &
-            & minimum = 0.0_rk, initial_value = 0.0_rk)
+            & minimum = 0.0_rk, initial_value = 0.1_rk)
         call self%register_bottom_state_variable(self%id_bursis, "bursis", "mgSi m-2", "Burried biogenic silica", &
-            & minimum = 0.0_rk, initial_value = 0.0_rk)
+            & minimum = 0.0_rk, initial_value = 0.1_rk)
 
         !----- Initialize diagnostic variables -----!
         call self%register_diagnostic_variable(self%id_chla, "chla", "mgChla m-3", "Chlorophyll a concentration")
@@ -153,6 +153,18 @@ contains
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_det)
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_dia)
         call self%add_to_aggregate_variable(standard_variables%total_nitrogen, self%id_fla)
+
+        ! Add module switches
+        call self%get_parameter(self%use_community_sinking, "use_community_sinking", "", "Activate community composition dependent sinking rates", default = .false.)
+        if (self%use_community_sinking) then
+            call self%register_state_variable(self%id_dsnk, "sdnk", "mgN m-3", "Detritus sinking speed advector", minimum = 0.0_rk, initial_value = 5.58e-5_rk) ! TODO
+            call self%register_diagnostic_variable(self%id_snkspd, "snkspd", "m d-1", "Daily mean detritus sinking speed", output = output_time_step_averaged)
+            call self%get_parameter(self%sr_dia2det, "sr_dia2det", "m s-1", "Sinking rate of detritus comming from diatoms", default = -5.58e-5_rk)
+            call self%get_parameter(self%sr_fla2det, "sr_fla2det", "m s-1", "Sinking rate of detritus comming from flagellates", default = -5.58e-5_rk)
+            call self%get_parameter(self%sr_mes2det, "sr_mes2det", "m s-1", "Sinking rate of detritus comming from mesozooplankton", default = -5.58e-5_rk)
+            call self%get_parameter(self%sr_mic2det, "sr_mic2det", "m s-1", "Sinking rate of detritus comming from microzooplankton", default = -5.58e-5_rk)
+            call self%get_parameter(self%sr_det2det, "sr_det2det", "m s-1", "Sinking rate of detritus comming from detritus", default = -5.58e-5_rk)
+        end if
 
     contains
         
